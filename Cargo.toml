@@ -1,0 +1,10 @@
+[package]
+name = "vulcan"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ctrlc = "3.4"
+active-win-pos-rs = "0.10"
+system-idle-time = "1.0.4"
+windows = { version = "0.62", features = ["Win32_UI_WindowsAndMessaging", "Win32_Foundation", "Win32_System_Shutdown"] }
