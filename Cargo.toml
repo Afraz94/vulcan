@@ -4,10 +4,5 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-ctrlc = "3.4"
-active-win-pos-rs = "0.10"
-system-idle-time = "1.0.4"
-chrono = "0.4.44"
-winrt-notification = "0.5.1"
-auto-launcher = "1.0.3"
-uptime_lib = "0.3.1"
+serde = "1.0.228"
+reqwest = "0.13.4"

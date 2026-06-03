@@ -1,30 +1,64 @@
-use winrt_notification::{Duration as ToastDuration, Sound, Toast};
-use std::{process::Command, thread, time::Duration};
-use active_win_pos_rs::get_active_window;
+use std::{env, thread, time::{Duration, SystemTime}};
 
-fn wait_for_vs_code() {
-    loop {
-        if let Ok(window) = get_active_window() {
-            if window.app_name.contains("Visual Studio Code") {
-                 Toast::new(Toast::POWERSHELL_APP_ID).title("Vulcan").text1("Welcome To The Forge! ⚒️").sound(Some(Sound::SMS)).duration(ToastDuration::Short).show().expect("Unable To Toast");
-                 break;
+fn get_last_commit_time(dir_path: &std::path::Path) -> Option<SystemTime> {
+    dir_path
+        .join(".git")
+        .join("logs")
+        .join("HEAD")
+        .metadata()
+        .ok()?
+        .modified()
+        .ok()
+}
+
+fn git_exists() {
+    match env::current_dir() {
+        Ok(dir_path) => {
+            println!("Current Directory: {:?}", dir_path);
+
+            if !dir_path.join(".git").exists() {
+                println!("Please initialise git for Vulcan to wake up.");
+                return;
             }
-        }
-        thread::sleep(Duration::from_millis(500));
+
+            println!("[VULCAN] Git detected.");
+            thread::sleep(Duration::from_millis(1500));
+            println!("[VULCAN] Heating up the furnace!");
+            thread::sleep(Duration::from_millis(1500));
+            println!("[VULCAN] Vulcan awake!");
+
+            let mut last_seen = get_last_commit_time(&dir_path);
+
+            match last_seen {
+                Some(_) => println!("Resuming from last commit."),
+                None => println!("No commits yet. Vulcan is watching for your first."),
+            }
+
+            loop {
+                thread::sleep(Duration::from_secs(30));
+                let current = get_last_commit_time(&dir_path);
+
+                if current != last_seen {
+                    match last_seen {
+                        None => {
+                            println!("[VULCAN] First commit detected.");
+                            thread::sleep(Duration::from_millis(1500));
+                            println!("[VULCAN] The forge has been lit!");
+                        },
+                        _ => {
+                            println!("[VULCAN] New commit detected.");
+                            thread::sleep(Duration::from_secs(3));
+                            println!("[VULCAN] Anvil has been struck! Commit tracked!");
+                        }
+                    }
+                    last_seen = current;
+                }
+            }
+        },
+        Err(_) => println!("Could not get directory.")
     }
 }
 
 fn main() {
-    let result = if cfg!(target_os = "windows") {
-        Command::new("cmd").args(["/C", "code -n D:\\vulcan"]).spawn()
-    } else {
-        Command::new("code").args(["-n", "/d/vulcan"]).spawn()
-    };
-
-    match result {
-        Ok(_) => {
-            wait_for_vs_code();
-        }
-        Err(e) => eprintln!("Failed to launch VS Code: {e}"),
-    }
+    git_exists();
 }
