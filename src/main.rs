@@ -1,6 +1,7 @@
 use std::{env, thread, time::{Duration, SystemTime}};
-use reqwest::header::{ACCEPT, CONTENT_TYPE};
+use reqwest::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE, USER_AGENT};
 use tokio::time::sleep;
+use serde::Deserialize;
 
 enum PollResult {
     Success(String),
@@ -9,6 +10,17 @@ enum PollResult {
     Pending,
     SlowDown,
     UnknownError(String),
+}
+
+#[derive(Deserialize, Debug)]
+struct GitHubUser {
+    login: String,
+}
+#[derive(Deserialize, Debug)]
+struct GitHubRepo {
+    name: String,
+    fork: bool,
+    owner: GitHubUser,
 }
 
 async fn github_login() {
@@ -41,7 +53,8 @@ async fn github_login() {
 
         match poll_for_token(device_code).await {
             PollResult::Success(token) => {
-                println!("[VULCAN] Success! Access Token acquired: {}", token);
+                println!("[VULCAN] Github login successful!");
+                fetch_stats(token).await;
                 break; 
             }
             PollResult::Pending => {
@@ -114,6 +127,59 @@ async fn poll_for_token(device_code: &str) -> PollResult {
         PollResult::UnknownError("GitHub API returned an unrecognizable structural layout".to_string())
     }
 }
+
+async fn fetch_stats(token: String){
+    let user_url = "https://api.github.com/user";
+    let client = reqwest::Client::new();
+    
+    let user_response = client
+    .get(user_url)
+    .header(AUTHORIZATION, format!("Bearer {}", token))
+    .header(ACCEPT, "application/vnd.github+json")
+    .header("X-GitHub-Api-Version", "2026-03-10")
+    .header(USER_AGENT, "Vulcan")
+    .send()
+    .await
+    .unwrap();
+
+    let user_data = user_response.json::<GitHubUser>().await.unwrap();
+    println!("User Data: {:?}", user_data);
+    println!("Scanning the repositories...");
+    
+    let repos_url = "https://api.github.com/user/repos?per_page=100";
+    let repos_response = client
+        .get(repos_url)
+        .header(AUTHORIZATION, format!("Bearer {}", token))
+        .header(ACCEPT, "application/vnd.github+json")
+        .header("X-GitHub-Api-Version", "2022-11-28")
+        .header(USER_AGENT, "Vulcan")
+        .send()
+        .await
+        .unwrap(); 
+
+    let repos = repos_response.json::<Vec<GitHubRepo>>().await.unwrap();
+
+    let mut personal_count = 0;
+    let mut collaborative_count = 0;
+
+    for repo in repos{
+        println!("[VULCAN] Analyzing forge repository: {}", repo.name);
+        if repo.fork{
+            collaborative_count += 1;
+        } else if repo.owner.login == user_data.login {
+            personal_count += 1;
+        } else {
+            collaborative_count += 1;
+        }
+    }
+
+    let vulcan_score = (personal_count * 10) + (collaborative_count * 25);
+    println!("--- [VULCAN FORGE REPORT] ---");
+    println!("Personal Projects Managed: {}", personal_count);
+    println!("Collaborative/Open-Source Forges: {}", collaborative_count);
+    println!("Total Forge Score: {} Points", vulcan_score);
+}
+
 #[allow(dead_code)]
 fn get_last_commit_time(dir_path: &std::path::Path) -> Option<SystemTime> {
     dir_path
