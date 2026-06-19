@@ -1,0 +1,10 @@
+[package]
+name = "vulcan-watcher"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+notify = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+vulcan-state = { path = "../vulcan-state" }
