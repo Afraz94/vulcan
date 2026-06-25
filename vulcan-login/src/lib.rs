@@ -6,7 +6,6 @@ use serde::Deserialize;
 struct LoginCredentials {
     device_code: String,
     user_code: String,
-    verification_uri: String,
     expires_in: u32,
     interval: u32,
 }
@@ -17,68 +16,94 @@ struct TokenResponse{
     error: Option<String>,
 }
 
-pub async fn github_login() {
-    let github_client_id: &str = "Ov23lighLHiu8cvDI0zn"; // Ideally load from env var later
-    let device_code_url = format!("https://github.com/login/device/code?client_id={github_client_id}&scope=repo+user");
-
-    let client = reqwest::Client::new();
-    let credentials_response = client
-    .post(device_code_url)
-    .header(ACCEPT, "application/json")
-    .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
-    .send()
-    .await
-    .unwrap()
-    .json::<LoginCredentials>()
-    .await
-    .unwrap();
+async fn get_device_code(client: &reqwest::Client, client_id: &str) -> LoginCredentials {
+    let url = format!("https://github.com/login/device/code?client_id={}&scope=repo+user", client_id);
     
-    println!("Please visit the following link and type the user code below: {}", credentials_response.verification_uri);
-    println!("User Code: {}", credentials_response.user_code);
-    println!("The code shall expire in {} seconds", credentials_response.expires_in);
-
-    let access_token_url = format!("https://github.com/login/oauth/access_token?client_id={github_client_id}&device_code={}&grant_type=urn:ietf:params:oauth:grant-type:device_code", credentials_response.device_code);
-
-
-    loop {
-        sleep(Duration::from_secs(credentials_response.interval as u64)).await;
-        
-        let access_token_response = client
-        .post(&access_token_url)
+    client
+        .post(url)
         .header(ACCEPT, "application/json")
+        .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .send()
         .await
         .unwrap()
-        .json::<TokenResponse>()
+        .json::<LoginCredentials>()
         .await
-        .unwrap();
+        .unwrap()
+}
 
-        match access_token_response.error.as_deref() {
-            None => {
-                if let Some(_token) = access_token_response.access_token {
-                    println!("Authorised!");
-                    break;
+fn authorise_user(credentials: &LoginCredentials) {
+    let auth_url = "https://github.com/login/device";
+
+       println!("Click the following link to authorize and enter the user code below: {auth_url}");
+       println!("User code: {}", credentials.user_code);
+       println!("The code expires in {} seconds", credentials.expires_in);
+}
+
+async fn poll_for_token(client: &reqwest::Client, credentials: &LoginCredentials, client_id: &str) -> Option<String> {
+    let token_url = format!(
+        "https://github.com/login/oauth/access_token?client_id={client_id}&device_code={}&grant_type=urn:ietf:params:oauth:grant-type:device_code", {&credentials.device_code});
+
+        let mut time_interval = credentials.interval;
+
+        loop {
+            let access_token_response = client
+            .post(&token_url)
+            .header(ACCEPT, "application/json")
+            .send()
+            .await
+            .unwrap()
+            .json::<TokenResponse>()
+            .await
+            .unwrap();
+
+            match access_token_response.error.as_deref() {
+        
+                None => {
+                    if let Some(token) = access_token_response.access_token {
+                        println!("Authorised!");
+                        return Some(token);
+                    }
                 }
-            }
 
-            Some("authorization_pending") => {
+                Some("authorization_pending") => {
+                    
+                }
 
+                Some("slow_down") => {
+                    time_interval += 5;
+                }
+            
+                Some("expired_token") => {
+                    println!("Code expired! Restaring login...");
+                    return None;
+                }
+            
+                Some(other_error) => {
+                    println!("Unexpected error: {other_error}");
+                    return None;
+                }
+            
             }
+        
+            sleep(Duration::from_secs(time_interval as u64)).await;        
+        
+    } 
 
-            Some("slow_down") => {
-                sleep(Duration::from_secs(5)).await;
-            }
+}
 
-            Some("expired_token") => {
-                println!("Code expired! Restaring login...");
-                break;
-            }
+pub async fn github_login() -> String {
+    let github_client_id = "Ov23lighLHiu8cvDI0zn";
+    let client = reqwest::Client::new();
 
-            Some(other_error) => {
-                println!("Unexpected error: {other_error}");
-                break;
-            }
+    loop{
+
+        let user_credentials = get_device_code(&client, github_client_id).await;
+        authorise_user(&user_credentials);     
+
+        if let Some(token) = poll_for_token(&client, &user_credentials, github_client_id).await {
+            return token;
         }
-    }
 
+        println!("Restaring login...\n");
+   }
 }
