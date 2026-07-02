@@ -1,22 +1,18 @@
 [workspace]
 members = [
-    "vulcan-core",
-    "vulcan-state",
-    "vulcan-watcher"
+    "vulcan-login",
+    "vulcan-storage",
 ]
 resolver = "2"
 
 [workspace.dependencies]
-# Bumped to latest stable 2026 releases
-sled = "0.34.7"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
-chrono = { version = "0.4.45", features = ["serde"] }
-thiserror = "2.0.18"
 reqwest = { version = "0.13.4", features = ["json"] }
 tokio = { version = "1.52.3", features = ["full"] }
-keyring-core = "1.0.0"
+keyring = "4.1.2"
 notify = "8.2.0"
+secrecy = "0.10.3"
 
 # Aggressive release optimization definitions apply across all sub-crates automatically
 [profile.release]
