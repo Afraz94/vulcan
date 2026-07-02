@@ -7,3 +7,4 @@ edition = "2024"
 reqwest = { workspace = true }
 tokio = { workspace = true }
 serde = {workspace = true}
+vulcan_storage = { path = "../vulcan-storage" }
